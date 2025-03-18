@@ -1,25 +1,31 @@
 import asyncio
-from pydantic import BaseModel
 from agents import (
-    Agent, InputGuardrail, GuardrailFunctionOutput, Runner, 
-    FileSearchTool, WebSearchTool, function_tool, RunConfig
+    Agent, Runner, FileSearchTool, WebSearchTool, RunConfig
 )
 
 # ==========================================================================
-# 1. DEFINING AGENTS AND TOOLS
+# AGENTS AND TOOLS TUTORIAL
 # ==========================================================================
-# Documents must be prepared for RAG using the vectorize_docs.py script, which:
-# - Uploads a document to OpenAI (e.g., test.pdf)
-# - Creates a vector store
-# - Adds the document to the vector store
-# - Returns a vector store ID to use in the FileSearchTool
+# This tutorial demonstrates the basic concepts of:
+# 1. Creating tools for agents
+# 2. Defining specialist agents with specific capabilities
+# 3. Setting up agent handoffs for delegation
 
+# ==========================================================================
+# 1. DEFINING TOOLS
+# ==========================================================================
 # Create a FileSearchTool for document-based knowledge agent
 document_file_search = FileSearchTool(
-    vector_store_ids=["vs_67d8a6a7c9c4819187ffcdd44d1cd330"],  # Replace with your vector store ID
+    vector_store_ids=["vs_67d92ca1f8988191a68174aa06c76df3"], 
     max_num_results=3,
 )
 
+# Create a WebSearchTool for the web search agent
+web_search = WebSearchTool()
+
+# ==========================================================================
+# 2. CREATING SPECIALIST AGENTS
+# ==========================================================================
 # Document knowledge agent that uses RAG with FileSearchTool
 rag_agent = Agent(
     name="Document Knowledge Agent",
@@ -31,9 +37,6 @@ Be precise and factual in your responses, and acknowledge when information might
 Use the file search tool to look for relevant information before answering.""",
     tools=[document_file_search],
 )
-
-# Create a WebSearchTool for the web search agent
-web_search = WebSearchTool()
 
 # Web search agent for retrieving up-to-date information
 search_agent = Agent(
@@ -47,6 +50,9 @@ If search results are limited, acknowledge that and explain what you were able t
     tools=[web_search],
 )
 
+# ==========================================================================
+# 3. DELEGATION WITH HANDOFFS
+# ==========================================================================
 # Delegation agent that routes queries to appropriate specialist agents
 delegation_agent = Agent(
     name="Delegation Agent",
@@ -55,69 +61,32 @@ For questions about documents, research papers, or information that might be in 
 For questions requiring current information, news, or real-time data, delegate to the Web Search Agent.
 Analyze the query carefully to make the appropriate routing decision.""",
     handoffs=[rag_agent, search_agent],
-    input_guardrails=[
-        InputGuardrail(guardrail_function=topic_classifier_guardrail),  # Defined below
-    ],
 )
 
 # ==========================================================================
-# 2. IMPLEMENTING GUARDRAILS
-# ==========================================================================
-# Define the classification model for the guardrail
-class TopicClassification(BaseModel):
-    """Classification of the user query to determine appropriate agent routing."""
-    is_document_related: bool
-    requires_web_search: bool
-    reasoning: str
-
-# Guardrail agent to determine if the query is valid and classify it
-guardrail_agent = Agent(
-    name="Query Validator",
-    instructions="Determine if the user query is appropriate to answer and classify it for routing.",
-    output_type=TopicClassification,
-)
-
-# Guardrail function that runs before the main agent
-async def topic_classifier_guardrail(ctx, agent, input_data):
-    """Guardrail function to classify user queries and ensure they're appropriate."""
-    result = await Runner.run(guardrail_agent, input_data, context=ctx.context)
-    final_output = result.final_output_as(TopicClassification)
-    
-    # Not triggering the tripwire as we want the query to be processed
-    # We're just using the guardrail to classify the topic
-    return GuardrailFunctionOutput(
-        output_info=final_output,
-        tripwire_triggered=False,
-    )
-
-# ==========================================================================
-# MAIN FUNCTION - RUNNING THE DEMO
+# DEMO EXECUTION
 # ==========================================================================
 async def main():
     """Run the demo with examples of document-based and web search queries."""
     # Test with a document-related question
-    document_query = "From the document you are provided with, tell me what is the deep research capability?"
+    document_query = "From the document you are provided with, tell me what is Brainli?"
     
     result = await Runner.run(
         delegation_agent, 
-        document_query,
-        run_config=RunConfig(
-            workflow_name="Document and Web Information Assistant",
-            trace_include_sensitive_data=True
-        )
+        document_query
     )
     
-    # Test with a web search question (current information)
+    print(result)
+    
+    # Test with a web search question
     web_query = "What are the latest developments in AI in 2024?"
     
     result = await Runner.run(
         delegation_agent, 
-        web_query,
-        run_config=RunConfig(
-            workflow_name="Document and Web Information Assistant",
-            trace_include_sensitive_data=True
-        )
+        web_query
     )
+    
+    print(result)
 
 if __name__ == "__main__":
     asyncio.run(main())
