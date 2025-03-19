@@ -80,7 +80,7 @@ async def main():
     print(result.final_output)
     
     # Test with a web search question
-    web_query = "What are the latest developments in AI in 2024?"
+    web_query = "What are the latest developments in AI in 2025?"
     
     result = await Runner.run(
         delegation_agent, 

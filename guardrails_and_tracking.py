@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from agents import (
     Agent, InputGuardrail, GuardrailFunctionOutput, Runner, 
-    FileSearchTool, WebSearchTool, RunConfig, InputGuardrailTripwireTriggered
+    FileSearchTool, WebSearchTool, RunConfig, InputGuardrailTripwireTriggered,
+    RunContextWrapper
 )
 
 load_dotenv()
@@ -71,7 +72,7 @@ Classify the query to help with routing to the appropriate specialist agent.""",
 )
 
 # Guardrail function that runs before the main agent
-async def business_query_guardrail(ctx, agent, input_data):
+async def business_query_guardrail(ctx: RunContextWrapper, agent: Agent, input_data: str):
     """Guardrail function to classify queries and ensure they're business-related."""
     result = await Runner.run(guardrail_agent, input_data, context=ctx.context)
     final_output = result.final_output_as(BusinessQueryClassification)
@@ -131,7 +132,7 @@ async def main():
     
     # Create a new run config for distinct tracing
     web_run_config = RunConfig(
-        workflow_name="Brainli Business Assistant with Guardrails",
+        workflow_name="Web Search configuration",
     )
     
     result = await Runner.run(
@@ -146,7 +147,7 @@ async def main():
     non_business_query = "What's the recipe for chocolate chip cookies?"
     
     non_business_run_config = RunConfig(
-        workflow_name="Brainli Business Assistant with Guardrails",
+        workflow_name="Non business workflow",
     )
     
     try:
@@ -156,7 +157,7 @@ async def main():
             run_config=non_business_run_config
         )
     except InputGuardrailTripwireTriggered as e:
-        pass
+        print("Guardrail triggered")
 
 if __name__ == "__main__":
     asyncio.run(main()) 
